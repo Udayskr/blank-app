@@ -3,11 +3,12 @@ import requests
 import xml.etree.ElementTree as ET
 import time
 import re
-import json
+import asyncio
+import edge_tts
+import base64
 
 st.set_page_config(page_title="Global Market News", layout="centered")
 
-# প্রিমিয়াম ডিজাইন ও স্মুথ অ্যানিমেশন সিএসএস
 st.markdown("""
     <style>
     .stApp { background-color: #0A0F1C; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
@@ -32,13 +33,15 @@ st.markdown("""
     
     .news-box-old { border-left: 4px solid #00E5FF; padding: 18px; margin-bottom: 15px; background-color: #121A2F; border-radius: 0px 8px 8px 0px;}
     .news-title-old { color: #FFFFFF; font-size: 20px; font-weight: bold; margin-bottom: 8px;}
-    .news-desc-old { color: #B0BEC5; font-size: 16px; line-height: 1.5;}
+    .news-desc-old { color: #B0BEC5; font-size: 16px; line-height: 1.4;}
     </style>
 """, unsafe_allow_html=True)
 
 def clean_text(text):
     clean = re.sub(r'<.*?>', '', text)
-    clean = re.sub(r'BBC Homepage.*?(?=\w)', '', clean, flags=re.IGNORECASE)
+    unwanted_phrases = ["Skip to content", "Accessibility Help", "BBC Home", "NewsSport", "CultureFuture", "WeatherSounds"]
+    for p in unwanted_phrases:
+        clean = clean.replace(p, "")
     return clean.strip()
 
 def get_full_article_details(url, backup_desc):
@@ -49,7 +52,7 @@ def get_full_article_details(url, backup_desc):
         clean_paras = []
         for p in paragraphs:
             clean_p = clean_text(p)
-            if len(clean_p.split()) > 8 and "Copyright" not in clean_p and "Getty" not in clean_p:
+            if len(clean_p.split()) > 10 and "Copyright" not in clean_p and "Getty" not in clean_p and "Skip" not in clean_p:
                 clean_paras.append(clean_p)
         
         if clean_paras:
@@ -85,6 +88,24 @@ def fetch_finance_news():
     except Exception as e:
         return str(e)
 
+def get_microsoft_voice(text):
+    async def _generate():
+        communicate = edge_tts.Communicate(text, "en-US-AriaNeural", rate="-5%")
+        audio_data = bytearray()
+        async for chunk in communicate.stream():
+            if chunk["type"] == "audio":
+                audio_data.extend(chunk["data"])
+        return audio_data
+
+    try:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        audio_bytes = loop.run_until_complete(_generate())
+        b64 = base64.b64encode(audio_bytes).decode()
+        return f'<audio autoplay="true"><source src="data:audio/mp3;base64,{b64}" type="audio/mp3"></audio>'
+    except:
+        return ""
+
 main_area = st.empty()
 
 while True:
@@ -106,40 +127,17 @@ while True:
         with main_area.container():
             st.markdown("<div class='header'>📊 GLOBAL MARKET NEWS (LIVE)</div>", unsafe_allow_html=True)
             
-            js_title = json.dumps(title)
-            js_desc = json.dumps(desc)
+            audio_html = get_microsoft_voice(f"{title}. {desc}")
+            st.markdown(audio_html, unsafe_allow_html=True)
             
-            # নিখুঁত ভয়েস এবং স্টাইলিশ এন্ট্রি বক্স
             live_html = f"""
             <div class='news-box-new'>
                 <div class='news-title-new'>{title}</div>
                 <div class='news-desc-new'>{desc}</div>
             </div>
-            
-            <script>
-            (function() {{
-                const titleText = {js_title};
-                const descText = {js_desc};
-                
-                if ('speechSynthesis' in window) {{
-                    window.speechSynthesis.cancel();
-                    const utterance = new SpeechSynthesisUtterance(titleText + ". " + descText);
-                    utterance.lang = 'en-US';
-                    utterance.rate = 0.95;
-                    
-                    const voices = window.speechSynthesis.getVoices();
-                    const preferredVoice = voices.find(v => v.name.includes('Google') || v.name.includes('Natural') || v.name.includes('Female'));
-                    if (preferredVoice) {{
-                        utterance.voice = preferredVoice;
-                    }}
-                    window.speechSynthesis.speak(utterance);
-                }}
-            }})();
-            </script>
             """
             st.markdown(live_html, unsafe_allow_html=True)
             
-            # নিচের পুরোনো খবরগুলো
             old_news_html = ""
             for old_idx in range(1, len(display_history)):
                 old_title, old_desc = display_history[old_idx]
@@ -152,7 +150,7 @@ while True:
             st.markdown(old_news_html, unsafe_allow_html=True)
             st.markdown(f"<div style='color:#78909C; text-align:right; font-size:14px; margin-top:25px; font-weight:bold;'>News {index}/{len(news_items)} | Source: Premium Business Feed</div>", unsafe_allow_html=True)
             
-        time.sleep(25) 
+        time.sleep(30) 
         
     with main_area.container():
         st.markdown("<h3 style='color:#FFD700; text-align:center; padding: 50px 0;'>🔄 Analyzing Next Market Trend...</h3>", unsafe_allow_html=True)
