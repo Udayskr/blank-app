@@ -3,9 +3,12 @@ import requests
 import xml.etree.ElementTree as ET
 import time
 import re
+import streamlit.components.v1 as components
 
+# পেজ সেটআপ
 st.set_page_config(page_title="Live Finance News", layout="centered")
 
+# কাস্টম ডিজাইন
 st.markdown("""
     <style>
     .stApp { background-color: #050505; font-family: 'Courier New', Courier, monospace; }
@@ -23,12 +26,10 @@ def clean_html(raw_html):
     cleanr = re.compile('<.*?>')
     return re.sub(cleanr, '', raw_html).strip()
 
+# খবর আনার ফাংশন (BBC Business)
 def fetch_finance_news():
-    # CNBC ব্লক করায় BBC Business RSS ব্যবহার করা হয়েছে (এটি ১০০% কাজ করবে)
     url = "http://feeds.bbci.co.uk/news/business/rss.xml"
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
-    }
+    headers = {"User-Agent": "Mozilla/5.0"}
     try:
         response = requests.get(url, headers=headers, timeout=10)
         root = ET.fromstring(response.content)
@@ -40,7 +41,6 @@ def fetch_finance_news():
             news_list.append((title.strip(), clean_html(desc)))
         return news_list
     except Exception as e:
-        # যদি কোনো এরর হয়, তাহলে সেটি রিটার্ন করবে
         return str(e)
 
 main_area = st.empty()
@@ -48,14 +48,10 @@ main_area = st.empty()
 while True:
     news_items = fetch_finance_news()
     
-    # এরর হ্যান্ডলিং: ডাটা না পেলে বা এরর হলে স্ক্রিনে দেখাবে
     if not news_items or isinstance(news_items, str):
-        error_msg = news_items if isinstance(news_items, str) else "Server busy."
         with main_area.container():
-            st.markdown(f"<h3 style='color:red; text-align:center;'>⚠️ Connection Failed</h3>", unsafe_allow_html=True)
-            st.markdown(f"<p style='color:#aa0000; text-align:center; font-size:14px;'>Error: {error_msg}</p>", unsafe_allow_html=True)
-            st.markdown("<p style='color:yellow; text-align:center;'>Retrying in 10 seconds...</p>", unsafe_allow_html=True)
-        time.sleep(10)
+            st.markdown("<h3 style='color:red; text-align:center;'>⚠️ Connection Failed. Retrying...</h3>", unsafe_allow_html=True)
+            time.sleep(10)
         continue
         
     display_history = []
@@ -68,66 +64,66 @@ while True:
         with main_area.container():
             st.markdown("<div class='header'>📈 Finance News (LIVE)</div>", unsafe_allow_html=True)
             
-            new_title, new_desc = display_history[0]
-            esc_title = new_title.replace('"', '\\"').replace("'", "\\'")
-            esc_desc = new_desc.replace('"', '\\"').replace("'", "\\'")
+            # --- অটো ভয়েস রিডার (Streamlit Components) ---
+            esc_title = title.replace('"', '\\"').replace("'", "\\'")
+            esc_desc = desc.replace('"', '\\"').replace("'", "\\'")
             
-            # --- জাভাস্ক্রিপ্ট দিয়ে ভয়েস এবং টাইপিং ইফেক্ট ---
-            html_content = f"""
-            <div class='news-box-new'>
-                <div class='news-title-new' id='title-{index}'></div>
-                <div class='news-desc-new' id='desc-{index}'></div>
-            </div>
-            
+            voice_script = f"""
             <script>
-            (function() {{
-                const titleStr = "{esc_title}";
-                const descStr = "{esc_desc}";
-                
-                // অটো ভয়েস রিডার 
                 if ('speechSynthesis' in window) {{
-                    window.speechSynthesis.cancel(); 
-                    const msg = new SpeechSynthesisUtterance(titleStr + "... " + descStr);
+                    window.speechSynthesis.cancel();
+                    var msg = new SpeechSynthesisUtterance("{esc_title}... {esc_desc}");
                     msg.lang = 'en-US';
-                    msg.rate = 0.9; 
+                    msg.rate = 0.9;
                     window.speechSynthesis.speak(msg);
                 }}
-
-                // টাইপরাইটার ইফেক্ট
-                let ti = 0; let di = 0;
-                const speed = 40; 
-                function typeTitle() {{
-                    if (ti < titleStr.length) {{
-                        document.getElementById('title-{index}').innerHTML += titleStr.charAt(ti);
-                        ti++;
-                        setTimeout(typeTitle, speed);
-                    }} else {{ setTimeout(typeDesc, 200); }}
-                }}
-                function typeDesc() {{
-                    if (di < descStr.length) {{
-                        document.getElementById('desc-{index}').innerHTML += descStr.charAt(di);
-                        di++;
-                        setTimeout(typeDesc, 30);
-                    }}
-                }}
-                typeTitle();
-            }})();
             </script>
             """
-            st.markdown(html_content, unsafe_allow_html=True)
+            components.html(voice_script, width=0, height=0)
             
+            # নতুন খবরের টাইপরাইটার অ্যানিমেশনের জন্য জায়গা
+            top_news_placeholder = st.empty()
+            
+            # পুরোনো খবরগুলো সাজানো
+            old_news_html = ""
             for old_idx in range(1, len(display_history)):
                 old_title, old_desc = display_history[old_idx]
-                st.markdown(f"""
+                old_news_html += f"""
                 <div class='news-box-old'>
                     <div class='news-title-old'>➤ {old_title}</div>
                     <div class='news-desc-old'>{old_desc[:100]}...</div> 
                 </div>
-                """, unsafe_allow_html=True)
-                
+                """
+            st.markdown(old_news_html, unsafe_allow_html=True)
             st.markdown(f"<div style='color:#444; text-align:right; font-size:12px; margin-top:20px;'>News {index}/10 | Source: BBC Business</div>", unsafe_allow_html=True)
             
-        time.sleep(20) 
+            # --- Python দিয়ে টাইপরাইটার অ্যানিমেশন (কখনো ব্লক হবে না) ---
+            typed_title = ""
+            for char in title:
+                typed_title += char
+                top_news_placeholder.markdown(f"""
+                <div class='news-box-new'>
+                    <div class='news-title-new'>{typed_title}</div>
+                    <div class='news-desc-new'></div>
+                </div>
+                """, unsafe_allow_html=True)
+                time.sleep(0.02) # টাইটেল লেখার স্পিড
+                
+            time.sleep(0.3) 
+            
+            typed_desc = ""
+            for char in desc:
+                typed_desc += char
+                top_news_placeholder.markdown(f"""
+                <div class='news-box-new'>
+                    <div class='news-title-new'>{title}</div>
+                    <div class='news-desc-new'>{typed_desc}</div>
+                </div>
+                """, unsafe_allow_html=True)
+                time.sleep(0.01) # ডেসক্রিপশন লেখার স্পিড
+                
+        # পরের খবর আসার আগে ১৫ সেকেন্ড অপেক্ষা করবে
+        time.sleep(15) 
         
     with main_area.container():
         st.markdown("<h3 style='color:#00FF00; text-align:center; padding: 50px 0;'>🔄 Syncing New Headlines...</h3>", unsafe_allow_html=True)
