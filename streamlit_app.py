@@ -7,13 +7,27 @@ import json
 
 st.set_page_config(page_title="Global Market News", layout="centered")
 
+# প্রিমিয়াম ডিজাইন ও স্মুথ অ্যানিমেশন সিএসএস
 st.markdown("""
     <style>
     .stApp { background-color: #0A0F1C; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
     .header { color: #00E5FF; text-align: center; font-size: 28px; font-weight: 900; border-bottom: 3px solid #00E5FF; padding-bottom: 12px; margin-bottom: 25px; text-transform: uppercase; letter-spacing: 2px;}
     
-    .news-box-new { border-left: 6px solid #FFD700; padding: 25px; margin-bottom: 25px; background-color: #121A2F; border-radius: 0px 10px 10px 0px; box-shadow: 4px 4px 15px rgba(0, 0, 0, 0.5);}
-    .news-title-new { color: #FFFFFF; font-size: 30px; font-weight: 800; margin-bottom: 15px; line-height: 1.4;}
+    @keyframes slideIn {
+        from { opacity: 0; transform: translateY(20px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    
+    .news-box-new { 
+        border-left: 6px solid #FFD700; 
+        padding: 25px; 
+        margin-bottom: 25px; 
+        background-color: #121A2F; 
+        border-radius: 0px 10px 10px 0px; 
+        box-shadow: 4px 4px 15px rgba(0, 0, 0, 0.5);
+        animation: slideIn 0.6s ease-out;
+    }
+    .news-title-new { color: #FFFFFF; font-size: 28px; font-weight: 800; margin-bottom: 15px; line-height: 1.4;}
     .news-desc-new { color: #E0E0E0; font-size: 18px; line-height: 1.6;}
     
     .news-box-old { border-left: 4px solid #00E5FF; padding: 18px; margin-bottom: 15px; background-color: #121A2F; border-radius: 0px 8px 8px 0px;}
@@ -22,13 +36,11 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# সমস্ত HTML ট্যাগ ও অপ্রয়োজনীয় জাংক টেক্সট পরিষ্কার করার ফাংশন
 def clean_text(text):
     clean = re.sub(r'<.*?>', '', text)
     clean = re.sub(r'BBC Homepage.*?(?=\w)', '', clean, flags=re.IGNORECASE)
     return clean.strip()
 
-# লিংকের ভেতর থেকে নিখুঁত বিবরণ বের করার ফাংশন
 def get_full_article_details(url, backup_desc):
     try:
         headers = {"User-Agent": "Mozilla/5.0"}
@@ -94,14 +106,14 @@ while True:
         with main_area.container():
             st.markdown("<div class='header'>📊 GLOBAL MARKET NEWS (LIVE)</div>", unsafe_allow_html=True)
             
-            # json.dumps ব্যবহার করায় যেকোনো কোট বা ট্যাগ শতভাগ নিরাপদে পাস হবে
             js_title = json.dumps(title)
             js_desc = json.dumps(desc)
             
-            voice_and_type_script = f"""
+            # নিখুঁত ভয়েস এবং স্টাইলিশ এন্ট্রি বক্স
+            live_html = f"""
             <div class='news-box-new'>
-                <div class='news-title-new' id='live-title'></div>
-                <div class='news-desc-new' id='live-desc'></div>
+                <div class='news-title-new'>{title}</div>
+                <div class='news-desc-new'>{desc}</div>
             </div>
             
             <script>
@@ -122,35 +134,12 @@ while True:
                     }}
                     window.speechSynthesis.speak(utterance);
                 }}
-
-                let ti = 0; let di = 0;
-                const titleElem = document.getElementById('live-title');
-                const descElem = document.getElementById('live-desc');
-                
-                function typeTitle() {{
-                    if (ti < titleText.length) {{
-                        titleElem.innerHTML += titleText.charAt(ti);
-                        ti++;
-                        setTimeout(typeTitle, 15);
-                    }} else {{
-                        setTimeout(typeDesc, 200);
-                    }}
-                }}
-                
-                function typeDesc() {{
-                    if (di < descText.length) {{
-                        descElem.innerHTML += descText.charAt(di);
-                        di++;
-                        setTimeout(typeDesc, 5);
-                    }}
-                }}
-                
-                typeTitle();
             }})();
             </script>
             """
-            st.markdown(voice_and_type_script, unsafe_allow_html=True)
+            st.markdown(live_html, unsafe_allow_html=True)
             
+            # নিচের পুরোনো খবরগুলো
             old_news_html = ""
             for old_idx in range(1, len(display_history)):
                 old_title, old_desc = display_history[old_idx]
@@ -163,7 +152,7 @@ while True:
             st.markdown(old_news_html, unsafe_allow_html=True)
             st.markdown(f"<div style='color:#78909C; text-align:right; font-size:14px; margin-top:25px; font-weight:bold;'>News {index}/{len(news_items)} | Source: Premium Business Feed</div>", unsafe_allow_html=True)
             
-        time.sleep(30) 
+        time.sleep(25) 
         
     with main_area.container():
         st.markdown("<h3 style='color:#FFD700; text-align:center; padding: 50px 0;'>🔄 Analyzing Next Market Trend...</h3>", unsafe_allow_html=True)
