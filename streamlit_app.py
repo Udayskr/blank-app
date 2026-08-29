@@ -3,12 +3,8 @@ import requests
 import xml.etree.ElementTree as ET
 import time
 import re
-from bs4 import BeautifulSoup
-import asyncio
-import edge_tts
-import base64
 
-st.set_page_config(page_title="Premium Finance News", layout="centered")
+st.set_page_config(page_title="Global Market News", layout="centered")
 
 st.markdown("""
     <style>
@@ -25,22 +21,21 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# লিঙ্ক থেকে খবরের বিস্তারিত অংশ স্ক্র্যাপ করার ফাংশন
+# পাইথনের রেগুলার এক্সপ্রেশন দিয়ে লিংকের ভেতর থেকে বিস্তারিত টেক্সট বের করার ফাংশন (কোনো bs4 লাগবে না)
 def get_full_article_details(url, backup_desc):
     try:
-        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+        headers = {"User-Agent": "Mozilla/5.0"}
         res = requests.get(url, headers=headers, timeout=5)
-        soup = BeautifulSoup(res.text, 'html.parser')
-        paragraphs = soup.find_all('p')
+        paragraphs = re.findall(r'<p[^>]*>(.*?)</p>', res.text, re.DOTALL)
+        clean_paras = []
+        for p in paragraphs:
+            clean_p = re.sub(r'<.*?>', '', p).strip()
+            if len(clean_p.split()) > 10:
+                clean_paras.append(clean_p)
         
-        # ছোট ও অদরকারি লাইন বাদ দিয়ে মূল খবর এক জায়গায় করা
-        article_text = " ".join([p.text.strip() for p in paragraphs if len(p.text.split()) > 12])
-        
-        if len(article_text) > 100:
-            sentences = article_text.split('. ')
-            # খবরের প্রথম ৩টি বড় বাক্য নেবে (বিস্তারিত পড়ার জন্য)
-            detailed_desc = '. '.join(sentences[:3])
-            return detailed_desc + "..." if not detailed_desc.endswith('.') else detailed_desc
+        if clean_paras:
+            combined = " ".join(clean_paras[:2])
+            return combined
         return backup_desc
     except:
         return backup_desc
@@ -56,14 +51,12 @@ def fetch_finance_news():
             title = item.find('title').text.strip()
             link = item.find('link').text.strip()
             
-            # অদরকারি পার্সোনাল খবর বাদ দেওয়া
             if any(word in title.lower() for word in ["how i", "i was", "my ", " me ", "addiction"]):
                 continue
                 
             desc_element = item.find('description')
             backup_desc = desc_element.text if desc_element is not None else ""
             
-            # মূল লিংকে ঢুকে বিস্তারিত খবর নিয়ে আসবে
             full_desc = get_full_article_details(link, backup_desc)
             news_list.append((title, full_desc))
             
@@ -72,26 +65,6 @@ def fetch_finance_news():
         return news_list
     except Exception as e:
         return str(e)
-
-# প্রিমিয়াম Microsoft Azure Neural Voice তৈরি করার ফাংশন
-def get_premium_voice(text):
-    async def _generate():
-        # en-GB-SoniaNeural হলো একদম প্রফেশনাল ব্রিটিশ নিউজ অ্যাংকরের ভয়েস
-        communicate = edge_tts.Communicate(text, "en-GB-SoniaNeural", rate="-5%") 
-        audio_data = bytearray()
-        async for chunk in communicate.stream():
-            if chunk["type"] == "audio":
-                audio_data.extend(chunk["data"])
-        return audio_data
-
-    try:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        audio_bytes = loop.run_until_complete(_generate())
-        b64 = base64.b64encode(audio_bytes).decode()
-        return f'<audio autoplay="true" style="display:none;"><source src="data:audio/mp3;base64,{b64}" type="audio/mp3"></audio>'
-    except:
-        return ""
 
 main_area = st.empty()
 
@@ -114,13 +87,68 @@ while True:
         with main_area.container():
             st.markdown("<div class='header'>📊 GLOBAL MARKET NEWS (LIVE)</div>", unsafe_allow_html=True)
             
-            # প্রিমিয়াম ভয়েস প্লেয়ার 
-            audio_html = get_premium_voice(f"{title}. {desc}")
-            st.markdown(audio_html, unsafe_allow_html=True)
+            esc_title = title.replace('"', '\\"').replace("'", "\\'")
+            esc_desc = desc.replace('"', '\\"').replace("'", "\\'")
             
-            top_news_placeholder = st.empty()
+            # ব্রাউজারের প্রিমিয়াম নিউরাল ভয়েস এবং টাইপরাইটার একসাথে রান করার স্ক্রিপ্ট
+            voice_and_type_script = f"""
+            <div class='news-box-new'>
+                <div class='news-title-new' id='live-title'></div>
+                <div class='news-desc-new' id='live-desc'></div>
+            </div>
             
-            # নিচের ৫টি খবরের ফুল ডিটেইলস (কোনো ব্লার ছাড়া)
+            <script>
+            (function() {{
+                const titleText = "{esc_title}";
+                const descText = "{esc_desc}";
+                
+                // ব্রাউজারের প্রিমিয়াম নিউরাল ভয়েস রিডার
+                if ('speechSynthesis' in window) {{
+                    window.speechSynthesis.cancel();
+                    const utterance = new SpeechSynthesisUtterance(titleText + ". " + descText);
+                    utterance.lang = 'en-US';
+                    utterance.rate = 0.95; // ন্যাচারাল নিউজ পড়ার গতি
+                    
+                    // সেরা ভয়েস সিলেক্ট করার চেষ্টা
+                    const voices = window.speechSynthesis.getVoices();
+                    const preferredVoice = voices.find(v => v.name.includes('Google') || v.name.includes('Natural') || v.name.includes('Female'));
+                    if (preferredVoice) {{
+                        utterance.voice = preferredVoice;
+                    }}
+                    
+                    window.speechSynthesis.speak(utterance);
+                }}
+
+                // টাইপরাইটার অ্যানিমেশন
+                let ti = 0; let di = 0;
+                const titleElem = document.getElementById('live-title');
+                const descElem = document.getElementById('live-desc');
+                
+                function typeTitle() {{
+                    if (ti < titleText.length) {{
+                        titleElem.innerHTML += titleText.charAt(ti);
+                        ti++;
+                        setTimeout(typeTitle, 15);
+                    }} else {{
+                        setTimeout(typeDesc, 200);
+                    }}
+                }}
+                
+                function typeDesc() {{
+                    if (di < descText.length) {{
+                        descElem.innerHTML += descText.charAt(di);
+                        di++;
+                        setTimeout(typeDesc, 5);
+                    }}
+                }}
+                
+                typeTitle();
+            }})();
+            </script>
+            """
+            st.markdown(voice_and_type_script, unsafe_allow_html=True)
+            
+            # নিচের পুরোনো খবরগুলো (কোনো ব্লার ছাড়া ফুল ডিটেইলস)
             old_news_html = ""
             for old_idx in range(1, len(display_history)):
                 old_title, old_desc = display_history[old_idx]
@@ -133,35 +161,9 @@ while True:
             st.markdown(old_news_html, unsafe_allow_html=True)
             st.markdown(f"<div style='color:#78909C; text-align:right; font-size:14px; margin-top:25px; font-weight:bold;'>News {index}/{len(news_items)} | Source: Premium Business Feed</div>", unsafe_allow_html=True)
             
-            # টাইপরাইটার অ্যানিমেশন (Python ভিত্তিক, ব্লক হবে না)
-            typed_title = ""
-            for char in title:
-                typed_title += char
-                top_news_placeholder.markdown(f"""
-                <div class='news-box-new'>
-                    <div class='news-title-new'>{typed_title}</div>
-                    <div class='news-desc-new'></div>
-                </div>
-                """, unsafe_allow_html=True)
-                time.sleep(0.01) 
-                
-            time.sleep(0.3) 
-            
-            typed_desc = ""
-            for char in desc:
-                typed_desc += char
-                top_news_placeholder.markdown(f"""
-                <div class='news-box-new'>
-                    <div class='news-title-new'>{title}</div>
-                    <div class='news-desc-new'>{typed_desc}</div>
-                </div>
-                """, unsafe_allow_html=True)
-                time.sleep(0.005) 
-                
-        # বর্ণনা অনেক বড় হওয়ায় পড়ার জন্য সময় বাড়িয়ে ৩০ সেকেন্ড করা হলো
         time.sleep(30) 
         
     with main_area.container():
         st.markdown("<h3 style='color:#FFD700; text-align:center; padding: 50px 0;'>🔄 Analyzing Next Market Trend...</h3>", unsafe_allow_html=True)
     time.sleep(3)
-    
+            
