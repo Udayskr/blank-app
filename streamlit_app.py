@@ -3,6 +3,7 @@ import requests
 import xml.etree.ElementTree as ET
 import time
 import re
+import json
 
 st.set_page_config(page_title="Global Market News", layout="centered")
 
@@ -21,7 +22,13 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# পাইথনের রেগুলার এক্সপ্রেশন দিয়ে লিংকের ভেতর থেকে বিস্তারিত টেক্সট বের করার ফাংশন (কোনো bs4 লাগবে না)
+# সমস্ত HTML ট্যাগ ও অপ্রয়োজনীয় জাংক টেক্সট পরিষ্কার করার ফাংশন
+def clean_text(text):
+    clean = re.sub(r'<.*?>', '', text)
+    clean = re.sub(r'BBC Homepage.*?(?=\w)', '', clean, flags=re.IGNORECASE)
+    return clean.strip()
+
+# লিংকের ভেতর থেকে নিখুঁত বিবরণ বের করার ফাংশন
 def get_full_article_details(url, backup_desc):
     try:
         headers = {"User-Agent": "Mozilla/5.0"}
@@ -29,16 +36,16 @@ def get_full_article_details(url, backup_desc):
         paragraphs = re.findall(r'<p[^>]*>(.*?)</p>', res.text, re.DOTALL)
         clean_paras = []
         for p in paragraphs:
-            clean_p = re.sub(r'<.*?>', '', p).strip()
-            if len(clean_p.split()) > 10:
+            clean_p = clean_text(p)
+            if len(clean_p.split()) > 8 and "Copyright" not in clean_p and "Getty" not in clean_p:
                 clean_paras.append(clean_p)
         
         if clean_paras:
             combined = " ".join(clean_paras[:2])
             return combined
-        return backup_desc
+        return clean_text(backup_desc)
     except:
-        return backup_desc
+        return clean_text(backup_desc)
 
 def fetch_finance_news():
     url = "http://feeds.bbci.co.uk/news/business/rss.xml"
@@ -48,7 +55,7 @@ def fetch_finance_news():
         root = ET.fromstring(response.content)
         news_list = []
         for item in root.findall('./channel/item')[:15]:
-            title = item.find('title').text.strip()
+            title = clean_text(item.find('title').text)
             link = item.find('link').text.strip()
             
             if any(word in title.lower() for word in ["how i", "i was", "my ", " me ", "addiction"]):
@@ -87,10 +94,10 @@ while True:
         with main_area.container():
             st.markdown("<div class='header'>📊 GLOBAL MARKET NEWS (LIVE)</div>", unsafe_allow_html=True)
             
-            esc_title = title.replace('"', '\\"').replace("'", "\\'")
-            esc_desc = desc.replace('"', '\\"').replace("'", "\\'")
+            # json.dumps ব্যবহার করায় যেকোনো কোট বা ট্যাগ শতভাগ নিরাপদে পাস হবে
+            js_title = json.dumps(title)
+            js_desc = json.dumps(desc)
             
-            # ব্রাউজারের প্রিমিয়াম নিউরাল ভয়েস এবং টাইপরাইটার একসাথে রান করার স্ক্রিপ্ট
             voice_and_type_script = f"""
             <div class='news-box-new'>
                 <div class='news-title-new' id='live-title'></div>
@@ -99,27 +106,23 @@ while True:
             
             <script>
             (function() {{
-                const titleText = "{esc_title}";
-                const descText = "{esc_desc}";
+                const titleText = {js_title};
+                const descText = {js_desc};
                 
-                // ব্রাউজারের প্রিমিয়াম নিউরাল ভয়েস রিডার
                 if ('speechSynthesis' in window) {{
                     window.speechSynthesis.cancel();
                     const utterance = new SpeechSynthesisUtterance(titleText + ". " + descText);
                     utterance.lang = 'en-US';
-                    utterance.rate = 0.95; // ন্যাচারাল নিউজ পড়ার গতি
+                    utterance.rate = 0.95;
                     
-                    // সেরা ভয়েস সিলেক্ট করার চেষ্টা
                     const voices = window.speechSynthesis.getVoices();
                     const preferredVoice = voices.find(v => v.name.includes('Google') || v.name.includes('Natural') || v.name.includes('Female'));
                     if (preferredVoice) {{
                         utterance.voice = preferredVoice;
                     }}
-                    
                     window.speechSynthesis.speak(utterance);
                 }}
 
-                // টাইপরাইটার অ্যানিমেশন
                 let ti = 0; let di = 0;
                 const titleElem = document.getElementById('live-title');
                 const descElem = document.getElementById('live-desc');
@@ -148,7 +151,6 @@ while True:
             """
             st.markdown(voice_and_type_script, unsafe_allow_html=True)
             
-            # নিচের পুরোনো খবরগুলো (কোনো ব্লার ছাড়া ফুল ডিটেইলস)
             old_news_html = ""
             for old_idx in range(1, len(display_history)):
                 old_title, old_desc = display_history[old_idx]
@@ -166,4 +168,4 @@ while True:
     with main_area.container():
         st.markdown("<h3 style='color:#FFD700; text-align:center; padding: 50px 0;'>🔄 Analyzing Next Market Trend...</h3>", unsafe_allow_html=True)
     time.sleep(3)
-            
+    
